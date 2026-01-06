@@ -38,7 +38,7 @@ export const GameStateInfo = ({ currentTable }) => {
         />
       )}
 
-      {currentTable.sidePots > 0 &&
+      {currentTable.sidePots?.length > 0 &&
         currentTable.sidePots.map((sidePot) => (
           <ChipsAmountPill
             chipsAmount={sidePot.amount}

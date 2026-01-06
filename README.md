@@ -1,4 +1,4 @@
-# Texas Hold'em Online - Real-Time Multiplayer Poker Game
+# Texas Hold'em Online - Real-Time Multiplayer Game
 
 A full-stack, real-time multiplayer poker game built with Node.js, React, and Socket.io. This MVP version features complete Texas Hold'em game logic, WebSocket-based real-time synchronization, and a modern React frontend.
 
@@ -24,7 +24,7 @@ A full-stack, real-time multiplayer poker game built with Node.js, React, and So
   - Real-time player list
   - Lobby chat functionality
 
-### 🔧 Technical Features
+### Technical Features
 - **Real-time Synchronization**: Socket.io for instant game state updates
 - **Secure Authentication**: JWT-based authentication system
 - **Responsive UI**: Modern React interface with Bootstrap and styled-components
@@ -125,10 +125,9 @@ This project is private and unlicensed.
 
 ---
 
-## 🎮 Enjoy Playing!
+## Enjoy Playing!
 
 Good luck at the tables!
 
 ---
 
-*Built with ❤️ for poker enthusiasts*

@@ -34,9 +34,9 @@ const server = app.listen(config.PORT, () => {
  */
 const io = socketio(server, {
   cors: {
-    origin: process.env.NODE_ENV === 'production' 
-      ? process.env.CLIENT_URL 
-      : 'http://localhost:3000',
+    origin: process.env.NODE_ENV === 'production'
+      ? process.env.CLIENT_URL
+      : true,
     methods: ['GET', 'POST'],
   },
 });

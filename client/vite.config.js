@@ -23,9 +23,14 @@ export default defineConfig({
   },
   server: {
     port: 3000,
+    open: true,
     proxy: {
       '/api': 'http://localhost:7777',
-      '/socket.io': { target: 'http://localhost:7777', ws: true },
+      '/socket.io': {
+        target: 'http://localhost:7777',
+        ws: true,
+        changeOrigin: true,
+      },
     },
   },
   resolve: {

@@ -16,7 +16,7 @@ import logger from '../../utils/logger';
  * Manages Socket.IO connection and provides socket context to children
  */
 const WebSocketProvider = ({ children }) => {
-  const { setTables, setPlayers, setChipsAmount } = useContext(globalContext);
+  const { setTables, setPlayers, setChipsAmount, setLobbyReady } = useContext(globalContext);
   const [socket, setSocket] = useState(null);
   const [socketId, setSocketId] = useState(null);
   const [connectionStatus, setConnectionStatus] = useState('disconnected');
@@ -85,6 +85,7 @@ const WebSocketProvider = ({ children }) => {
       setChipsAmount(amount);
       setTables(tables);
       setPlayers(players);
+      setLobbyReady?.(true);
     });
 
     socketInstance.on(SC_PLAYERS_UPDATED, (players) => {
@@ -96,24 +97,31 @@ const WebSocketProvider = ({ children }) => {
       logger.socket(SC_TABLES_UPDATED, tables);
       setTables(tables);
     });
-  }, [setChipsAmount, setTables, setPlayers]);
+  }, [setChipsAmount, setTables, setPlayers, setLobbyReady]);
 
   /**
    * Initialize socket connection
    */
-  const connect = useCallback(() => {
-    if (socketRef.current?.connected) {
+  const connect = useCallback((forceNew = false) => {
+    if (socketRef.current?.connected && !forceNew) {
       return socketRef.current;
+    }
+
+    if (forceNew && socketRef.current) {
+      socketRef.current.removeAllListeners();
+      socketRef.current.close();
+      socketRef.current = null;
+      setSocket(null);
     }
 
     try {
       const newSocket = io(config.socketURI, {
-        transports: ['websocket'],
-        upgrade: false,
+        path: '/socket.io',
+        transports: ['polling', 'websocket'],
         reconnection: true,
         reconnectionDelay: 1000,
-        reconnectionAttempts: 5,
-        timeout: 20000,
+        reconnectionAttempts: 20,
+        timeout: 10000,
       });
 
       socketRef.current = newSocket;
