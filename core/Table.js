@@ -483,7 +483,7 @@ class Table {
     this.minRaise = this.limit / 200;
   }
   dealPreflop() {
-    const arr = _abc.range(1, this.maxPlayers + 1);
+    const arr = Array.from({ length: this.maxPlayers }, (_, i) => i + 1);
     const order = arr.slice(this.button).concat(arr.slice(0, this.button));
 
     // deal cards to seated players

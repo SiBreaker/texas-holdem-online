@@ -6,6 +6,11 @@ import globalContext from '../context/global/globalContext';
 import setAuthToken from '../helpers/setAuthToken';
 import config from '../clientConfig';
 
+const getApiUrl = (path) => {
+  const base = config.apiBaseUrl || '';
+  return base ? `${base.replace(/\/$/, '')}/${path}` : `/${path}`;
+};
+
 /**
  * Custom hook for authentication operations
  * Provides login, register, and logout functionality
@@ -41,7 +46,7 @@ export const useAuth = () => {
     setError(null);
 
     try {
-      const res = await axios.post(`${config.socketURI}api/auth`, {
+      const res = await axios.post(getApiUrl('api/auth'), {
         email,
         password,
       });
@@ -50,7 +55,7 @@ export const useAuth = () => {
       setAuthToken(token);
 
       // Get user data
-      const userRes = await axios.get(`${config.socketURI}api/auth`, {
+      const userRes = await axios.get(getApiUrl('api/auth'), {
         headers: {
           'x-auth-token': token,
         },
@@ -58,7 +63,13 @@ export const useAuth = () => {
 
       handleAuthSuccess(token, userRes.data);
 
-      Swal.fire({
+      // Persist for Play page in case context hasn't updated yet
+      const userEmail = userRes.data?.email || userRes.data?.name;
+      if (userEmail) {
+        localStorage.setItem('playWalletAddress', userEmail);
+      }
+
+      await Swal.fire({
         icon: 'success',
         title: 'Success!',
         text: 'You have been logged in successfully.',
@@ -66,7 +77,7 @@ export const useAuth = () => {
         showConfirmButton: false,
       });
 
-      navigate('/play');
+      navigate('/play', { state: { walletAddress: userEmail } });
       return { success: true };
     } catch (err) {
       // Handle different error response formats
@@ -109,7 +120,7 @@ export const useAuth = () => {
     setError(null);
 
     try {
-      const res = await axios.post(`${config.socketURI}api/users`, {
+      const res = await axios.post(getApiUrl('api/users'), {
         name,
         email,
         password,
@@ -119,7 +130,7 @@ export const useAuth = () => {
       setAuthToken(token);
 
       // Get user data
-      const userRes = await axios.get(`${config.socketURI}api/auth`, {
+      const userRes = await axios.get(getApiUrl('api/auth'), {
         headers: {
           'x-auth-token': token,
         },
@@ -127,7 +138,12 @@ export const useAuth = () => {
 
       handleAuthSuccess(token, userRes.data);
 
-      Swal.fire({
+      const userEmail = userRes.data?.email || userRes.data?.name;
+      if (userEmail) {
+        localStorage.setItem('playWalletAddress', userEmail);
+      }
+
+      await Swal.fire({
         icon: 'success',
         title: 'Success!',
         text: 'Your account has been created successfully.',
@@ -135,7 +151,7 @@ export const useAuth = () => {
         showConfirmButton: false,
       });
 
-      navigate('/play');
+      navigate('/play', { state: { walletAddress: userEmail } });
       return { success: true };
     } catch (err) {
       // Handle different error response formats

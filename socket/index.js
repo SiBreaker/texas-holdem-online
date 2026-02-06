@@ -37,13 +37,16 @@ const tables = {
   1: new Table(1, 'Table 1', config.INITIAL_CHIPS_AMOUNT),
 };
 const players = {};
+const BOT_SOCKET_ID = 'bot-demo-1';
 
 function getCurrentPlayers() {
-  return Object.values(players).map((player) => ({
-    socketId: player.socketId,
-    id: player.id,
-    name: player.name,
-  }));
+  return Object.values(players)
+    .filter((p) => p.socketId !== BOT_SOCKET_ID)
+    .map((player) => ({
+      socketId: player.socketId,
+      id: player.id,
+      name: player.name,
+    }));
 }
 
 function getCurrentTables() {
@@ -171,7 +174,22 @@ const init = (socket, io) => {
       
       // Automatically sit player down
       sitDown(tableId, table.players.length, table.limit);
-      
+
+      // Add demo bot if only 1 player (so user can play immediately)
+      if (table.activePlayers().length === 1) {
+        const botPlayer = new Player(
+          BOT_SOCKET_ID,
+          'bot-demo',
+          'Demo Bot',
+          config.INITIAL_CHIPS_AMOUNT,
+        );
+        players[BOT_SOCKET_ID] = botPlayer;
+        table.addPlayer(botPlayer);
+        const botSeatId = 2;
+        table.sitPlayer(botPlayer, botSeatId, table.limit);
+        initNewHand(table);
+      }
+
       // Immediately send current table state to the joining player
       const tableCopy = hideOpponentCards(table, socket.id);
       socket.emit(SC_TABLE_UPDATED, {
@@ -487,7 +505,7 @@ const init = (socket, io) => {
   socket.on('disconnect', () => {
     try {
       const seat = findSeatBySocketId(socket.id);
-      if (seat && seat.player) {
+      if (seat && seat.player && players[socket.id]) {
         updatePlayerBankroll(seat.player, seat.stack);
       }
 
@@ -555,6 +573,7 @@ const init = (socket, io) => {
 
     table.players.forEach((player) => {
       const socketId = player.socketId;
+      if (socketId === BOT_SOCKET_ID) return; // Don't emit to bot
       const tableCopy = hideOpponentCards(table, socketId);
       io.to(socketId).emit(SC_TABLE_UPDATED, {
         table: tableCopy,
@@ -562,6 +581,26 @@ const init = (socket, io) => {
         from,
       });
     });
+
+    // Schedule bot action if it's the bot's turn
+    if (table.turn && table.seats[table.turn]?.player?.socketId === BOT_SOCKET_ID) {
+      setTimeout(() => {
+        const seat = table.seats[table.turn];
+        if (!seat || seat.player?.socketId !== BOT_SOCKET_ID) return;
+        let result;
+        if (table.callAmount === 0 || seat.bet >= table.callAmount) {
+          result = table.handleCheck(BOT_SOCKET_ID);
+        } else if (seat.stack + seat.bet >= table.callAmount) {
+          result = table.handleCall(BOT_SOCKET_ID);
+        } else {
+          result = table.handleFold(BOT_SOCKET_ID);
+        }
+        if (result) {
+          broadcastToTable(table, result.message);
+          changeTurnAndBroadcast(table, result.seatId);
+        }
+      }, 2000);
+    }
   }
 
   /**

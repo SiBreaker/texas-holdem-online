@@ -14,6 +14,7 @@ const GlobalState = ({ children }) => {
   const [tables, setTables] = useState(null);
   const [players, setPlayers] = useState(null);
   const [walletAddress, setWalletAddress] = useState('');
+  const [lobbyReady, setLobbyReady] = useState(false);
 
   // Memoize context value to prevent unnecessary re-renders
   const contextValue = useMemo(
@@ -34,6 +35,8 @@ const GlobalState = ({ children }) => {
       setPlayers,
       walletAddress,
       setWalletAddress,
+      lobbyReady,
+      setLobbyReady,
     }),
     [
       isLoading,
@@ -44,6 +47,7 @@ const GlobalState = ({ children }) => {
       tables,
       players,
       walletAddress,
+      lobbyReady,
     ]
   );
 

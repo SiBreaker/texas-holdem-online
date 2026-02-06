@@ -1,5 +1,5 @@
-import React, { useContext, useEffect, useState, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useContext, useEffect, useState, useMemo, useRef } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import Container from '../components/layout/Container';
 import Button from '../components/buttons/Button';
 import gameContext from '../context/game/gameContext';
@@ -27,8 +27,20 @@ import './Play.scss';
  */
 const Play = () => {
   const navigate = useNavigate();
-  const { socket } = useContext(socketContext);
-  const { walletAddress, userName, id } = useContext(globalContext);
+  const location = useLocation();
+  const { socket, reconnect } = useContext(socketContext);
+  const { walletAddress: contextWallet, setWalletAddress, setLobbyReady, lobbyReady, userName, id } = useContext(globalContext);
+  // Use location state or localStorage fallback (context may not have updated yet after login)
+  const walletAddress = contextWallet || location.state?.walletAddress || localStorage.getItem('playWalletAddress') || '';
+
+  // Trigger connection when landing on Play (socket may have failed during login)
+  useEffect(() => {
+    if (!walletAddress || !reconnect) return;
+    const t = setTimeout(() => {
+      if (!socket?.connected) reconnect(true);
+    }, 1000);
+    return () => clearTimeout(t);
+  }, [walletAddress, socket?.connected, reconnect]);
   const {
     messages,
     currentTable,
@@ -45,68 +57,80 @@ const Play = () => {
 
   const [bet, setBet] = useState(0);
   const [minLoadTimeElapsed, setMinLoadTimeElapsed] = useState(false);
-  const [playerRegistered, setPlayerRegistered] = useState(false);
+  const [hasJoinedTable, setHasJoinedTable] = useState(false);
+  const [loadError, setLoadError] = useState(null);
+  const hasRegisteredRef = useRef(false);
 
-  // Ensure minimum 5-second loading screen after login
+  // Ensure minimum 1-second loading screen after login
   useEffect(() => {
     const timer = setTimeout(() => {
-      setMinLoadTimeElapsed(true)
-    }, 5000) // Minimum 5 seconds
+      setMinLoadTimeElapsed(true);
+    }, 1000);
 
-    return () => clearTimeout(timer)
-  }, [])
+    return () => clearTimeout(timer);
+  }, []);
 
-  // Register player and join table
+  // Show error if stuck loading (25s to allow socket reconnection attempts)
   useEffect(() => {
-    // Validate prerequisites
-    if (!socket || !socket.connected) {
-      navigate('/');
-      return;
-    }
+    if (!walletAddress || currentTable) return;
 
+    const timer = setTimeout(() => {
+      setLoadError(
+        !socket?.connected
+          ? 'Connection failed. Ensure both servers are running (npm start) and you see "Server is running on port 7777" in the terminal. Then click Retry.'
+          : 'Taking longer than expected. The server may be busy.',
+      );
+    }, 25000);
+
+    return () => clearTimeout(timer);
+  }, [walletAddress, currentTable, socket?.connected]);
+
+  // Sync walletAddress to context if we got it from location/localStorage
+  useEffect(() => {
+    if (walletAddress && !contextWallet && setWalletAddress) {
+      setWalletAddress(walletAddress);
+    }
+  }, [walletAddress, contextWallet, setWalletAddress]);
+
+  // Register player when socket connects (once per play session)
+  useEffect(() => {
     if (!walletAddress) {
       navigate('/');
       return;
     }
+    if (!socket?.connected || hasRegisteredRef.current) return;
 
-    // Register player first if not already registered
-    if (!playerRegistered && socket.connected) {
-      const username = userName || walletAddress || `Player_${id || 'Guest'}`;
-      
-      logger.info('Registering player:', { walletAddress, username });
-      
-      // Register player via CS_FETCH_LOBBY_INFO
-      socket.emit(CS_FETCH_LOBBY_INFO, {
-        walletAddress,
-        socketId: socket.id,
-        gameId: 'demo-game',
-        username,
-      });
-      
-      // Mark as registered and wait for server to process
-      setPlayerRegistered(true);
-      
-      // Wait for player registration to complete, then join table
-      // The SC_RECEIVE_LOBBY_INFO event confirms registration
-      const joinTimer = setTimeout(() => {
-        if (socket.connected) {
-          joinTable(1);
-        }
-      }, 1000); // Give server time to register player
-      
-      return () => clearTimeout(joinTimer);
-    } else if (playerRegistered) {
-      // Player already registered, just join table
-      joinTable(1);
-    }
+    hasRegisteredRef.current = true;
+    const username = userName || walletAddress || `Player_${id || 'Guest'}`;
+    logger.info('Registering player:', { walletAddress, username });
 
-    // Cleanup on unmount
+    socket.emit(CS_FETCH_LOBBY_INFO, {
+      walletAddress,
+      socketId: socket.id,
+      gameId: 'demo-game',
+      username,
+    });
+  }, [socket, walletAddress, userName, id, navigate]);
+
+  // Join table only after server confirms registration (SC_RECEIVE_LOBBY_INFO)
+  useEffect(() => {
+    if (!lobbyReady || !socket?.connected || hasJoinedTable) return;
+
+    logger.info('Lobby ready, joining table');
+    setHasJoinedTable(true);
+    joinTable(1);
+  }, [lobbyReady, socket?.connected, hasJoinedTable, joinTable]);
+
+  // Cleanup on unmount
+  useEffect(() => {
     return () => {
-      if (socket && socket.connected) {
+      hasRegisteredRef.current = false;
+      setLobbyReady?.(false);
+      if (socket?.connected) {
         leaveTable();
       }
     };
-  }, [socket, walletAddress, userName, id, playerRegistered, navigate, joinTable, leaveTable]);
+  }, [socket, setLobbyReady, leaveTable]);
 
   // Update bet amount based on table state
   useEffect(() => {
@@ -145,7 +169,33 @@ const Play = () => {
     [containerStyles]
   );
 
-  // Show loading screen for minimum 5 seconds OR while waiting for table to join
+  // Show error state with retry option
+  if (loadError) {
+    return (
+      <Container
+        fullHeight
+        style={loadingContainerStyles}
+        className="play-area"
+      >
+        <div style={{ color: 'white', textAlign: 'center', padding: '2rem' }}>
+          <p style={{ marginBottom: '1rem' }}>{loadError}</p>
+          <Button
+            onClick={() => {
+              setLoadError(null);
+              setHasJoinedTable(false);
+              hasRegisteredRef.current = false;
+              reconnect?.(true);
+            }}
+            primary
+          >
+            Retry Connection
+          </Button>
+        </div>
+      </Container>
+    );
+  }
+
+  // Show loading screen while waiting for table to join
   if (!minLoadTimeElapsed || !currentTable) {
     return (
       <Container

@@ -19,11 +19,11 @@ const configureMiddleware = (app) => {
     contentSecurityPolicy: false, // Disable for Socket.IO compatibility
   }));
 
-  // CORS configuration
+  // CORS configuration - allow localhost and network access in development
   app.use(cors({
     origin: config.NODE_ENV === 'production'
       ? process.env.CLIENT_URL
-      : 'http://localhost:3000',
+      : true, // Allow any origin in development (localhost, 192.168.x.x, etc.)
     credentials: true,
   }));
 
